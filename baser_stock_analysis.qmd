@@ -1,0 +1,316 @@
+---
+title: "Base R: Stock Analysis"
+format: html
+editor: visual
+---
+
+```{r, message=FALSE}
+rm(list=ls())
+stocks <- read.csv("./IBM.csv")
+stocks$Date <- as.Date(stocks$Date,format="%m/%d/%Y")
+# Rename columns
+colnames(stocks) <- c("Date","Close","Open","High","Low", "Volume","Change")
+
+```
+```{r}
+# Calculate Rolling Means
+# 7 Days
+stocks$SMA7 <- stats::filter(stocks$Close,
+                        rep(1/7, 7),
+                        sides = 1)
+
+# 20 Days
+stocks$SMA20 <- stats::filter(stocks$Close, rep(1/20, 20), sides = 1)
+
+# 50 Days
+stocks$SMA50 <- stats::filter(stocks$Close,
+                         rep(1/50, 50),
+                         sides = 1)
+
+```
+```{r}
+# Calculate difference between high and low and calculate 20 moving average.
+stocks$highlo <- stocks$High - stocks$Low
+stocks$hilorolling <- stats::filter(stocks$highlo, rep(1/20, 20), sides = 1)
+```
+```{r}
+last_date <- max(stocks$Date, na.rm = TRUE)
+df_last60 <- stocks[stocks$Date >= last_date - 60, ]
+```
+
+
+
+### Plot 7 Day Moving Average
+
+```{r}
+
+# 1. Plot the closing price
+plot(df_last60$Close,
+     type = "l",
+     col = "black",
+     lwd = 2,
+     main = "Closing Price with 7-Day Moving Average",
+     xlab = "Index",
+     ylab = "Price")
+
+# 2. Add the 20-day moving average line
+lines(df_last60$SMA7,
+      col = "red",
+      lwd = 2)
+
+# 3. Add a legend
+legend("topleft",
+       legend = c("Close", "7-Day MA"),
+       col = c("black", "red"),
+       lwd = 2,
+       bty = "n")
+grid()
+
+```
+
+### 20 Day Moving Average
+
+```{r}
+last_date <- max(stocks$Date, na.rm = TRUE)
+df_last60 <- stocks[stocks$Date >= last_date - 100, ]
+
+# 1. Plot the closing price
+plot(df_last60$Close,
+     type = "l",
+     col = "black",
+     lwd = 2,
+     main = "Closing Price with 20-Day Moving Average",
+     xlab = "Index",
+     ylab = "Price")
+
+# 2. Add the 20-day moving average line
+lines(df_last60$SMA20,
+      col = "red",
+      lwd = 2)
+
+# 3. Add a legend
+legend("topleft",
+       legend = c("Close", "20-Day MA"),
+       col = c("black", "red"),
+       lwd = 2,
+       bty = "n")
+grid()
+
+```
+
+
+### 50 Day Moving Average
+
+```{r}
+last_date <- max(stocks$Date, na.rm = TRUE)
+df_last60 <- stocks[stocks$Date >= last_date - 100, ]
+# 1. Plot the closing price
+plot(df_last60$Close,
+     type = "l",
+     col = "black",
+     lwd = 2,
+     main = "Closing Price with 50-Day Moving Average",
+     xlab = "Index",
+     ylab = "Price")
+
+# 2. Add the 20-day moving average line
+lines(df_last60$SMA50,
+      col = "red",
+      lwd = 2)
+
+# 3. Add a legend
+legend("topleft",
+       legend = c("Close", "50-Day MA"),
+       col = c("black", "red"),
+       lwd = 2,
+       bty = "n")
+grid()
+```
+
+## Daily and Cumulative Returns
+### Daily
+```{r}
+stocks$Daily <- (stocks$Close / c(NA, head(stocks$Close, -1))) - 1
+stocks$Daily[1] <- 0
+stocks$Cumulative <- cumprod(1 + stocks$Daily) - 1
+
+```
+```{r}
+plot(stocks$Date,stocks$Daily,type='l',main="Daily Returns")
+```
+
+### Cumulative Returns
+
+```{r}
+plot(stocks$Date,stocks$Cumulative,type='l',main=" Cumulative Returns",xlab="Date",ylab="Return %")
+grid()
+```
+
+### Plot Daily High/Low and 20 day rolling average
+
+```{r}
+plot(df_last60$highlo,
+     type = "l",
+     col = "black",
+     lwd = 2,
+     main = "Daily High/Low Difference",
+     xlab = "Index",
+     ylab = "Price")
+
+# 2. Add the 20-day moving average line
+lines(df_last60$hilorolling,
+      col = "red",
+      lwd = 2)
+
+# 3. Add a legend
+legend("topleft",
+       legend = c("High Low", "20 Day MA"),
+       col = c("black", "red"),
+       lwd = 2,
+       bty = "n")
+grid()
+```
+
+### Bollinger Bands Plot
+
+```{r}
+# --- 1. Compute the 20-day SMA ---
+stocks$SMA20 <- stats::filter(stocks$Close, rep(1/20, 20), sides = 1)
+
+# --- 2. Compute the 20-day rolling standard deviation (base R) ---
+stocks$SD20 <- sqrt(
+  stats::filter((stocks$Close - stocks$SMA20)^2,
+                rep(1/20, 20),
+                sides = 1)
+)
+
+# --- 3. Upper & Lower Bollinger Bands ---
+stocks$Upper <- stocks$SMA20 + 2 * stocks$SD20
+stocks$Lower <- stocks$SMA20 - 2 * stocks$SD20
+
+# --- 4. Plotting ---
+plot(stocks$Date, stocks$Close,
+     type = "l", col = "black", lwd = 2,
+     main = "stocks Bollinger Bands (Base R)",
+     xlab = "Date", ylab = "Price")
+
+lines(stocks$Date, stocks$SMA20, col = "blue", lwd = 2)        # Middle band
+lines(stocks$Date, stocks$Upper, col = "red",  lwd = 2)        # Upper band
+lines(stocks$Date, stocks$Lower, col = "red",  lwd = 2)        # Lower band
+
+legend("topleft",
+       legend = c("Close", "SMA20", "Upper Band", "Lower Band"),
+       col = c("black", "blue", "red", "red"),
+       lwd = 2,
+       bty = "n")
+```
+
+### RSI Plot
+
+```{r}
+
+# --- 1. Calculate price changes ---
+stocks$Change <- c(NA, diff(stocks$Close))
+
+# --- 2. Separate gains and losses ---
+stocks$Gain <- ifelse(stocks$Change > 0, stocks$Change, 0)
+stocks$Loss <- ifelse(stocks$Change < 0, -stocks$Change, 0)
+
+# --- 3. Compute 14-period averages (base R rolling mean) ---
+n <- 14
+
+stocks$AvgGain <- stats::filter(stocks$Gain, rep(1/n, n), sides = 1)
+stocks$AvgLoss <- stats::filter(stocks$Loss, rep(1/n, n), sides = 1)
+
+# --- 4. Compute RS and RSI ---
+stocks$RS  <- stocks$AvgGain / stocks$AvgLoss
+stocks$RSI <- 100 - (100 / (1 + stocks$RS))
+
+# --- 5. Plot RSI ---
+plot(stocks$Date, stocks$RSI,
+     type = "l",
+     col = "blue",
+     lwd = 2,
+     ylim = c(0, 100),
+     main = "RSI(14) – Base R",
+     xlab = "Date",
+     ylab = "RSI")
+
+# --- 6. Add overbought/oversold lines ---
+abline(h = 70, col = "red", lty = 2, lwd = 2)   # Overbought
+abline(h = 30, col = "green", lty = 2, lwd = 2) # Oversold
+
+legend("topleft",
+       legend = c("RSI(14)", "70 Overbought", "30 Oversold"),
+       col = c("blue", "red", "green"),
+       lwd = 2,
+       lty = c(1, 2, 2),
+       bty = "n")
+```
+
+## Begin ARIMA Forecast
+
+```{r}
+close_ts <- ts(stocks$Close)
+fit1 <- arima(close_ts, order = c(1,1,0))
+fit2 <- arima(close_ts, order = c(0,1,1))
+fit3 <- arima(close_ts, order = c(1,1,1))
+AIC(fit1); AIC(fit2); AIC(fit3)
+```
+```{r}
+# Forcast 30 days
+fit <- fit3
+fc <- predict(fit, n.ahead = 30)
+pred  <- fc$pred
+upper <- fc$pred + 1.96 * fc$se
+lower <- fc$pred - 1.96 * fc$se
+future_dates <- seq(max(stocks$Date), by = "day", length.out = 31)[-1]
+
+## Plot Results
+
+plot(stocks$Date, stocks$SMA20,
+     type = "l", lwd = 2, col = "black",
+     main = "ARIMA(1,1,0) Forecast – Next 30 Days",
+     xlab = "Date",
+     ylab = "Close")
+
+# Forecast line
+lines(future_dates, pred, col = "blue", lwd = 2)
+
+# Confidence interval
+lines(future_dates, upper, col = "red", lwd = 1, lty = 2)
+lines(future_dates, lower, col = "red", lwd = 1, lty = 2)
+
+legend("topleft",
+       legend = c("Close", "Forecast", "95% CI"),
+       col = c("black", "blue", "red"),
+       lwd = c(2,2,1),
+       lty = c(1,1,2),
+       bty = "n")
+grid()
+```
+
+```{r}
+# Combined y-axis range
+ymin <- min(c(stocks$Close, lower), na.rm = TRUE)
+ymax <- max(c(stocks$Close, upper), na.rm = TRUE)
+
+plot(stocks$Date, stocks$Close,
+     type = "l", lwd = 2, col = "black",
+     main = "ARIMA(1,1,0) Forecast – Next 30 Days",
+     xlab = "Date",
+     ylab = "Close",
+     ylim = c(ymin, ymax))
+
+lines(future_dates, pred, col = "blue", lwd = 2)
+lines(future_dates, upper, col = "red",  lwd = 1, lty = 2)
+lines(future_dates, lower, col = "red",  lwd = 1, lty = 2)
+
+legend("topleft",
+       legend = c("Close", "Forecast", "95% CI"),
+       col = c("black", "blue", "red"),
+       lwd = c(2,2,1),
+       lty = c(1,1,2),
+       bty = "n")
+
+```
