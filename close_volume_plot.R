@@ -5,6 +5,12 @@ stocks$Date <- as.Date(stocks$Date,format="%m/%d/%Y")
 colnames(stocks) <- c("Date","Close","Open","High","Low", "Volume","Change")
 
 # Calculate Rolling Means
+
+
+
+# 5 Days
+stocks$SMA5 <- stats::filter(stocks$Close,
+                             rep(1/5, 5),sides = 1)
 # 7 Days
 stocks$SMA7 <- stats::filter(stocks$Close,
                              rep(1/7, 7),sides = 1)
