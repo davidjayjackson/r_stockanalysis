@@ -1,8 +1,8 @@
 ## Stock Analysis With Base R
 
 ## Read Data: Enter  CSV filename  and names of date and close column
-
-stocks <- read.csv("./IBM.csv")
+ grabdata <- function(file){
+stocks <- read.csv("file")
 # Rename columns
 colnames(stocks) <- c("Date","Close","Open","High","Low", "Volume","Change")
 stocks$Date <- as.Date(stocks$Date,format="%m/%d/%Y")
@@ -75,4 +75,4 @@ stocks$RSI <- 100 - (100 / (1 + stocks$RS))
 last_date <- max(stocks$Date, na.rm = TRUE)
 df_last60 <- stocks[stocks$Date >= last_date - 100, ]
 
-
+}
