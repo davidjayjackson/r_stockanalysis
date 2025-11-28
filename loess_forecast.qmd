@@ -1,0 +1,138 @@
+---
+title: "Loess Stock Forecasting"
+format: html
+editor: visual
+---
+
+## Quarto
+
+```{r, message=FALSE}
+library(tidyquant)
+library(pracma)
+library(tidyverse)
+library(fable)
+library(fabletools)
+library(tsibble)
+```
+
+# Grab Ford Stock Data
+
+```{r}
+
+rm(list=ls())
+TICKER <- "IBM"
+stocks <- tq_get(TICKER, from="2025-01-01")  %>%
+  mutate(
+    loess_20 = predict(loess(close ~ as.numeric(date), span = 0.1)),
+    loess_50 = predict(loess(close ~ as.numeric(date), span = 0.5))
+  )
+
+```
+
+## Plot with Loesss
+
+```{r}
+stocks |> filter(date >'2025-08-01') |> ggplot() +
+  geom_line(aes(x=date, y=close,colour="Close"), linewidth = 1) +
+  geom_line(aes(x=date,y = loess_20,colour="Lowess 0.1"), linewidth = 1) +
+  geom_line(aes(x=date,y = loess_50,colour="Lowess 0.5"), linewidth = 1)
+```
+
+```{r}
+sd_resid_20 <- sd(stocks$close - stocks$loess_20, na.rm = TRUE)
+stocks <- stocks %>%
+  mutate(
+    # Upper Band: loess_20 + 2 * SD_Residual
+    up_loess_2sd = loess_20 + 2 * sd_resid_20,
+    # Lower Band: loess_20 - 2 * SD_Residual
+    dn_loess_2sd = loess_20 - 2 * sd_resid_20
+  ) %>%
+
+  # Select and display the relevant columns
+  select(date, close, loess_20, loess_50, up_loess_2sd, dn_loess_2sd)
+```
+
+```{r}
+stocks %>% filter(date >="2025-10-01") |>
+  ggplot(aes(x = date, y = close)) +
+  geom_line(color = "blue", size = 0.5, alpha = 0.7) +
+  # Loess Line (Center)
+  geom_line(aes(y = loess_20), color = "#00BFC4", size = 1.2) +
+  # Upper and Lower SD Bands
+  geom_line(aes(y = up_loess_2sd), color = "red", linetype = "dashed", size = 0.7) +
+  geom_line(aes(y = dn_loess_2sd), color = "red", linetype = "dashed", size = 0.7) +
+  # Fill the area between the bands
+  geom_ribbon(aes(ymin = dn_loess_2sd, ymax = up_loess_2sd), fill = "red", alpha = 0.1) +
+  labs(
+    # --- DYNAMIC TITLE UPDATE ---
+    title = paste(TICKER, "Stock Price with LOESS_20 (±2σ Residual Bands)"),
+    y = "Closing Price ($)",
+    x = "Date"
+  ) +
+  theme_tq()
+```
+
+
+
+
+
+
+
+
+
+## Forecast: Naive, ETS and ARMA
+
+```{r}
+
+# 1. Convert to tsibble and fill missing dates
+stocks_ts <- stocks %>%
+  select(date, loess_20) %>%
+  as_tsibble(index = date) %>%
+  fill_gaps()
+
+# 2. Forward-fill missing closing prices (required for ETS)
+stocks_ts <- stocks_ts %>%
+  fill(loess_20, .direction = "downup")   # down then up for safety
+
+# 3. Fit models
+fit <- stocks_ts %>%
+  model(
+    naive = NAIVE(loess_20),
+    ets   = ETS(loess_20),
+    arima = ARIMA(loess_20)
+  )
+
+# 4. Diagnostics
+report(fit)
+
+```
+```{r}
+fc <- fit %>% forecast(h = "30 days")
+stocks_filtered <- stocks_ts %>%
+  filter(date >= "2025-08-01")
+autoplot(fc,stocks_filtered ) + facet_wrap(~.model)
+```
+
+
+```{r}
+fc %>%
+  filter(.model == "ets") %>%
+  autoplot(stocks_ts) +
+  labs(title = "ETS Forecast (30 Days)",
+       y = "Loess Price")
+```
+```{r}
+fc %>%
+  filter(.model == "naive") %>%
+  autoplot(stocks_ts) +
+  labs(title = "Naive Forecast (30 Days)",
+       y = "Loess Price")
+```
+
+```{r}
+fc %>%
+  filter(.model == "arima") %>%
+  autoplot(stocks_ts) +
+  labs(title = "ARIMA Forecast (30 Days)",
+       y = "Loess Price")
+```

@@ -51,7 +51,7 @@ plot(
   xlab = "",
   ylab = "Price"
 )
-lines(quarter$Date,quarter$SMA9,col="red")
+lines(quarter$Date,quarter$SMA5,col="red")
 lines(quarter$Date,quarter$SMA20,col="green")
 grid()
 
